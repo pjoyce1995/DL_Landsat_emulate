@@ -14,6 +14,7 @@ ee.Initialize()
 drive.mount('/content/gdrive')
 os.chdir('/content/gdrive/MyDrive/Colab_data')
 
+#The bands of interest
 bands_use_L5=['B1','B2','B3','B4','B5','B6','B7']
 bands_use_L7=['B1','B2','B3','B4','B5','B6_VCID_2','B7']
 
@@ -30,6 +31,10 @@ min_y = [63.386101452689466,66.12977287716515]
 max_y = [63.85857693568399,66.58794070628201]
 
 def find_area(image,geometry,band):
+  """
+  Determines the number of pixels in each sub-image that is downloaded.
+  Enables verification that both images are complete and can be saved.
+  """
   image2=image.select(band)
   sumDictionarypolygon1 = (image2.reduceRegion(
   reducer= ee.Reducer.count(),
@@ -45,6 +50,9 @@ def CLOUD_MASK(image):
   return masked
 
 def LatLonImg(img,num_bands,scale,geometry):
+  """
+  Obtains the latitude and longitude information from each image
+  """
   img = img.addBands(ee.Image.pixelLonLat())
 
   img = img.reduceRegion(reducer=ee.Reducer.toList(),\
@@ -64,6 +72,9 @@ def LatLonImg(img,num_bands,scale,geometry):
         
 # covert the lat, lon and array into an image
 def toImage(lats,lons,all_data_bands,band_len):
+  """
+  Converts the ee.Image Earth Engine object into a NumPy array
+  """
 
     # get the unique coordinates
     uniqueLats = np.unique(lats)
@@ -91,14 +102,14 @@ def toImage(lats,lons,all_data_bands,band_len):
     return arr
 
 
-step_size=0.0348 #optimised value for RAM limitations on Google Colab
-size_scene=128
-count_saved_pickle=5
+step_size=0.0348 #Size of each sub-image (with units of degrees). ).0348 is the optimised value for RAM limitations on Google Colab
+size_scene=128 #Pixel size of the scene to save
 ALL_im1=[]
 ALL_im2=[]
 ALL_im_pan=[]
 
-for shape in range(len(L7_codes)): #0,54,21
+#Iterating through each of the images
+for shape in range(len(L7_codes)):
   tot_x_iter=int((max_x[shape]-min_x[shape])/step_size)
   tot_y_iter=int((max_y[shape]-min_y[shape])/step_size)
   
@@ -114,15 +125,16 @@ for shape in range(len(L7_codes)): #0,54,21
 
       L7_codee='LE07_'+L7_codes[shape]
       L5_codee='1_LT05_'+L5_codes[shape]
-
-      L7_image = (ee.ImageCollection("LANDSAT/LE07/C01/T1_TOA")#.merge(ee.ImageCollection("LANDSAT/LE07/C01/T2_TOA"))
+      
+      #Retrieve the L7 and L5 images from Earth Engine
+      L7_image = (ee.ImageCollection("LANDSAT/LE07/C01/T1_TOA")
       .filterMetadata('system:index','equals',L7_codee)    
       .map(CLOUD_MASK)
       .median()
       .select(bands_use_L7)
       .clip(min_geom))
 
-      L7_pan = (ee.ImageCollection("LANDSAT/LE07/C01/T1_TOA")#.merge(ee.ImageCollection("LANDSAT/LE07/C01/T2_TOA"))
+      L7_pan = (ee.ImageCollection("LANDSAT/LE07/C01/T1_TOA")
       .filterMetadata('system:index','equals',L7_codee)    
       .map(CLOUD_MASK)
       .median()
@@ -141,7 +153,8 @@ for shape in range(len(L7_codes)): #0,54,21
       area5=find_area(L5_image,min_geom,'B1')
       areapan=find_area(L7_pan,min_geom,'B8')
 
-      if area7==area5 and areapan==(area7) and area5>0:  
+      if area7==area5 and areapan==(area7) and area5>0:  #Test that images are equivalent sizes
+        #Convert into NumPy arrays
         L5_band_result_names=['result'+str(y) for y in range(1,band_len_5+1)]
         result5 = L5_image.rename(L5_band_result_names)
         lat5, lon5, all_L5_data = LatLonImg(result5,band_len_5,30, min_geom)
@@ -153,8 +166,9 @@ for shape in range(len(L7_codes)): #0,54,21
         result_pan=L7_pan.rename('result1')
         latpan, lonpan, all_pan_data = LatLonImg(result_pan,1,15,min_geom)
 
-        if len(lat5)==len(all_L5_data[0]) and len(lat7)==len(all_L7_data[0]) and len(latpan)==len(all_pan_data[0]):
-
+        if len(lat5)==len(all_L5_data[0]) and len(lat7)==len(all_L7_data[0]) and len(latpan)==len(all_pan_data[0]): #Testing that images are same size
+          
+          #Convert into NumPy arrays
           im1_out5 = toImage(lat5,lon5,all_L5_data,band_len_5)
           im2_out7  = toImage(lat7,lon7,all_L7_data,band_len_7)
           im3_outpan=toImage(latpan, lonpan, all_pan_data,1)
@@ -168,7 +182,8 @@ for shape in range(len(L7_codes)): #0,54,21
           ALL_im_pan.append(im3_outpan[:size_scene*2,:size_scene*2,:])
           print('obtained images: ',str(len(ALL_im1)))
           
-          if len(ALL_im1)%1000==0:              
+          if len(ALL_im1)%1000==0:   
+            #Save collection of images to cloud storage when large enough
             im1_save=np.stack([ALL_im1[q] for q in range(len(ALL_im1))],axis=0)[:,:,:,:len(bands_use_L5)]
             ALL_im1=[]
             im2_save=np.stack([ALL_im2[q] for q in range(len(ALL_im2))],axis=0)[:,:,:,:len(bands_use_L7)]
@@ -192,7 +207,7 @@ for shape in range(len(L7_codes)): #0,54,21
         else:
           pass
 
-
+#Save last collection of images to cloud
 im1_save=np.stack([ALL_im1[q] for q in range(len(ALL_im1))],axis=0)[:,:,:,:len(bands_use_L5)]
 ALL_im1=[]
 im2_save=np.stack([ALL_im2[q] for q in range(len(ALL_im2))],axis=0)[:,:,:,:len(bands_use_L7)]
