@@ -1,3 +1,7 @@
+"""
+This code obtains Landsat 5 TM and Landsat 7 ETM+ image pairs, and filters out cloud then splits the image into 128x128 pixel boxes for the
+30m bands and 256x256 pixel boxes for the 15m pansharpened band
+"""
 import numpy as np
 import os
 import sys
