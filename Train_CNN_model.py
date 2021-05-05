@@ -231,24 +231,16 @@ test_dataset = (test_images,[test_labels_norm,test_labels_pan])
 training_steps=int(32119*9./(10*batch_size)) #32119 #9738 was reduced for bad regions
 testing_steps=int(32119*1./(10*batch_size))
 
-# learning rate schedule
-def step_decay(epoch):
-  if epoch<100:
-    lrate=0.001
-   elif 100<=epoch<200:
-    lrate=0.0001
-   else:
-    lrate=0.00001
-	return lrate
+from keras.callbacks import ReduceLROnPlateau
 
-from keras.callbacks import LearningRateScheduler
-lrate = LearningRateScheduler(step_decay)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1,
+                              patience=20, min_lr=0.00001)
 
 from keras.callbacks import ModelCheckpoint
 checkpoint = ModelCheckpoint("best_model_ALL5.hdf5", monitor='loss', verbose=1,
     save_best_only=False, mode='auto', save_freq='epoch')
 
-callbacks_list = [lrate,checkpoint ]
+callbacks_list = [reduce_lr,checkpoint ]
 
 batch_size=64 #Highest power of 2 possible with Colab for this model
 
